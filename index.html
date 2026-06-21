@@ -19,8 +19,10 @@
         .player-wall { display: flex; flex-wrap: wrap; gap: 10px; justify-content: center; margin-top: 15px; background: #050505; border-radius: 8px; padding: 10px; min-height: 50px; }
         .p-card { padding: 8px 15px; border-radius: 6px; font-size: 15px; font-weight: bold; }
         .p-alive-wait { background: #333; color: #aaa; }
-        .p-alive-voted { background: #196f3d; color: #fff; }
-        .p-dead { background: #78281f; color: #f1948a; text-decoration: line-through; opacity: 0.5; }
+        /* 下方微調主辦人後台看 YES/NO 的顏色，方便你一眼看穿 */
+        .p-alive-yes { background: #1f618d; color: #fff; border: 1px solid #5dade2; }
+        .p-alive-no { background: #943126; color: #fff; border: 1px solid #f1948a; }
+        .p-dead { background: #222; color: #555; text-decoration: line-through; opacity: 0.4; }
     </style>
 </head>
 <body>
@@ -28,7 +30,7 @@
     <div id="role-screen" class="box">
         <h1>《啦啦隊股長》<br>殺青慶功宴・搶紅包戰</h1>
         <p style="color: #aaa; font-size: 14px;">請選擇您在該裝置的身分：</p>
-        <button class="btn" style="background:#444;" onclick="chooseRole('host')">我是遊戲主辦人 (大螢幕投影)</button>
+        <button class="btn" style="background:#444;" onclick="chooseRole('host')">我是遊戲主辦人 (主控台)</button>
         <button class="btn" style="background:var(--gold); color:#000;" onclick="chooseRole('player')">我是劇組參賽者 (手機端)</button>
     </div>
 
@@ -40,7 +42,7 @@
     </div>
 
     <div id="host-screen" class="box hidden">
-        <h1>《啦啦隊股長》主控台</h1>
+        <h1>《啦啦隊股長》神仙主控台 👁️</h1>
         <div style="font-size: 30px; color: #ffdd67; font-weight: bold;">房間代碼：<span id="host-room-id">----</span></div>
         <hr style="border-color:#333; margin: 15px 0;">
         <p>當前存活：<span id="host-alive-count" style="color:var(--gold); font-size:22px; font-weight:bold;">0</span> 人 | 已投票：<span id="host-voted-count" style="color:#52be80; font-size:22px; font-weight:bold;">0</span> 人</p>
@@ -49,7 +51,7 @@
         <button class="btn" style="background:#eb984e; color:#000;" onclick="nextRound()">🎬 準備下一題！重置投票按鈕</button>
         <button class="btn" style="background:#555;" onclick="resetGame()">🔄 全員復活全局重來</button>
         
-        <div style="text-align:left; color:var(--gold); font-weight:bold; margin-top:15px;">🎬 現場劇組成員狀態：</div>
+        <div style="text-align:left; color:var(--gold); font-weight:bold; margin-top:15px;">🎬 劇組即時動態（主辦人透視模式）：</div>
         <div id="player-wall" class="player-wall"></div>
 
         <div id="host-result" class="box hidden" style="background:#000; margin-top:15px; border-color:#52be80;">
@@ -71,7 +73,7 @@
         
         <div id="wait-msg" class="hidden">
             <div style="color:#52be80; font-size:20px; font-weight:bold; margin: 20px 0;">✓ 抉擇已秘密鎖定！</div>
-            <p style="color:#aaa;">請抬頭觀看前方大螢幕開票結果...</p>
+            <p style="color:#aaa;">請等待主辦人開票結果...</p>
         </div>
         
         <div id="dead-msg" class="hidden">
@@ -81,8 +83,11 @@
     </div>
 
     <script>
-        // 🛠️ 請在下方引號內貼上你在第一階段複製的 Firebase 即時資料庫網址
+        // 🛠️ 請在下方引號內貼上你的 Firebase 即時資料庫網址
         const FIREBASE_DB_URL = "https://lala-party-2026-default-rtdb.firebaseio.com/";
+        
+        // 🔑 方案A：請在這裡設定你專屬的主辦人密碼（可以改成你想要的任何英文字或數字）
+        const HOST_PASSWORD = "lalala2026";
 
         // 初始化 Firebase
         firebase.initializeApp({ databaseURL: FIREBASE_DB_URL });
@@ -94,6 +99,15 @@
         let myPlayerId = '';
 
         function chooseRole(role) {
+            if(role === 'host') {
+                // 🔐 密碼驗證鎖
+                const pass = prompt("请输入主辦人認證密碼：");
+                if(pass !== HOST_PASSWORD) {
+                    alert("密碼錯誤！你不是真的主辦人吼～");
+                    return;
+                }
+            }
+
             currentRole = role;
             document.getElementById('role-screen').classList.add('hidden');
             document.getElementById('input-screen').classList.remove('hidden');
@@ -119,12 +133,14 @@
             roomRef = db.ref('rooms/' + myRoomCode);
             
             if(currentRole === 'host') {
-                // 主辦人初始化房間數據
-                roomRef.child('gameStatus').set({ roundState: 'voting', winner: '', yesCount: 0, noCount: 0 });
-                document.getElementById('input-screen').classList.add('hidden');
-                document.getElementById('host-screen').classList.remove('hidden');
-                document.getElementById('host-room-id').innerText = myRoomCode;
-                startHostListening();
+                // 主辦人進場時，先自動抹除該房過去的所有舊幽靈資料
+                roomRef.remove().then(() => {
+                    roomRef.child('gameStatus').set({ roundState: 'voting', winner: '', yesCount: 0, noCount: 0 });
+                    document.getElementById('input-screen').classList.add('hidden');
+                    document.getElementById('host-screen').classList.remove('hidden');
+                    document.getElementById('host-room-id').innerText = myRoomCode;
+                    startHostListening();
+                });
             } else {
                 // 參賽者加入
                 myPlayerId = 'p_' + Math.random().toString(36).substr(2, 9);
@@ -142,7 +158,7 @@
             }
         }
 
-        // 👑 【主辦人核心監聽】
+        // 👑 【主辦人透視監聽核心】
         function startHostListening() {
             roomRef.child('players').on('value', (snapshot) => {
                 const players = snapshot.val() || {};
@@ -158,11 +174,23 @@
                     if(p.alive && p.voted) votedCount++;
                     
                     let stateClass = 'p-alive-wait';
-                    let stateTxt = '(思索中)';
-                    if(!p.alive) { stateClass = 'p-dead'; stateTxt = '[領便當]'; }
-                    else if(p.voted) { stateClass = 'p-alive-voted'; stateTxt = '[已鎖定]'; }
+                    let stateTxt = '🤔 思考中';
                     
-                    wall.innerHTML += `<div class="p-card ${stateClass}">${p.name} ${stateTxt}</div>`;
+                    if(!p.alive) { 
+                        stateClass = 'p-dead'; 
+                        stateTxt = '💀 領便當'; 
+                    } else if(p.voted) { 
+                        // 👁️ 【核心功能】：在後台，如果他投了，直接顯示他到底投什麼！
+                        if(p.choice === 'Yes') {
+                            stateClass = 'p-alive-yes';
+                            stateTxt = '🔵 投 YES';
+                        } else if(p.choice === 'No') {
+                            stateClass = 'p-alive-no';
+                            stateTxt = '🔴 投 NO';
+                        }
+                    }
+                    
+                    wall.innerHTML += `<div class="p-card ${stateClass}">${p.name} (${stateTxt})</div>`;
                 }
                 
                 document.getElementById('host-alive-count').innerText = aliveCount;
@@ -191,13 +219,11 @@
                     winText = `🎉 開票結果：${winSide === 'Yes' ? 'YES' : 'NO'} 是少數方！順利晉級！`;
                 }
                 
-                // 大螢幕顯示結果
                 document.getElementById('result-winner-text').innerText = winText;
                 document.getElementById('result-yes-count').innerText = yesCount;
                 document.getElementById('result-no-count').innerText = noCount;
                 document.getElementById('host-result').classList.remove('hidden');
                 
-                // 更新每位玩家的死活狀態
                 for(let id in players) {
                     if(players[id].alive) {
                         if(winSide !== 'Both' && players[id].choice !== winSide) {
@@ -206,7 +232,6 @@
                     }
                 }
                 
-                // 廣播給所有人
                 roomRef.child('gameStatus').update({
                     roundState: 'revealed',
                     winner: winSide,
@@ -241,9 +266,8 @@
             });
         }
 
-        // 📱 【參賽者核心監聽】
+        // 📱 【參賽者監聽核心】
         function startPlayerListening() {
-            // 監聽自己的存活與投票狀態
             roomRef.child('players').child(myPlayerId).on('value', (snapshot) => {
                 const me = snapshot.val();
                 if(!me) return;
@@ -262,7 +286,6 @@
                         document.getElementById('player-status').innerText = "⌛ 抉擇已鎖定";
                         document.getElementById('player-status').style.background = "#196f3d";
                     } else {
-                        // 只有當大螢幕在「投票中」狀態時才顯示按鈕
                         roomRef.child('gameStatus/roundState').once('value', (snap) => {
                             if(snap.val() === 'voting') {
                                 document.getElementById('vote-area').classList.remove('hidden');
@@ -275,7 +298,6 @@
                 }
             });
 
-            // 監聽大螢幕是不是進入下一輪了
             roomRef.child('gameStatus/roundState').on('value', (state) => {
                 if(state === 'voting') {
                     roomRef.child('players').child(myPlayerId).once('value', (snap) => {
