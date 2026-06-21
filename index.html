@@ -15,11 +15,16 @@
         .btn-yes { background: var(--yes); } .btn-no { background: var(--no); }
         .hidden { display: none; }
         .badge { background: #2d2d2d; padding: 6px 12px; border-radius: 20px; font-size: 13px; display: inline-block; margin-bottom: 10px; }
-        input[type="text"] { width: 85%; padding: 14px; font-size: 18px; text-align: center; border-radius: 8px; margin-bottom: 12px; background: #000; color: #fff; border: 1px solid var(--gold); }
+        input[type="text"], input[type="number"] { width: 85%; padding: 14px; font-size: 18px; text-align: center; border-radius: 8px; margin-bottom: 12px; background: #000; color: #fff; border: 1px solid var(--gold); }
         
-        /* 👁️ 主辦人楚河漢界排版 */
+        /* 題目顯示大看板 */
+        .q-board { background: #222; border: 2px dashed var(--gold); padding: 15px; border-radius: 8px; font-size: 22px; font-weight: bold; color: #fff; margin: 15px 0; line-height: 1.4; }
+        .q-waiting { background: #333; color: #888; border: 1px solid #444; }
+
+        /* 陣營牆與置頂區樣式 */
         .live-panel { background: #000; border-radius: 8px; padding: 15px; margin-top: 15px; text-align: left; border: 1px solid #333; }
-        .live-stats { font-size: 18px; color: #fff; margin-bottom: 15px; background: #222; padding: 10px; border-radius: 6px; border-left: 5px solid var(--gold); }
+        .live-stats { font-size: 18px; color: #fff; margin-bottom: 15px; background: #222; padding: 10px; border-radius: 6px; border-left: 5px solid var(--gold); text-align: center; }
+        .my-focus-zone { background: #ffdd67; color: #000; padding: 15px; border-radius: 8px; font-weight: bold; font-size: 20px; margin: 15px 0; text-align: center; box-shadow: 0 0 10px rgba(255,221,103,0.5); }
         .split-zone { display: flex; gap: 15px; margin-bottom: 15px; }
         .zone { flex: 1; background: #111; padding: 10px; border-radius: 8px; min-height: 80px; box-sizing: border-box; }
         .zone-title { font-size: 14px; font-weight: bold; margin-bottom: 8px; padding-bottom: 4px; border-bottom: 1px solid #333; text-align: center; }
@@ -52,15 +57,23 @@
         <h1>《啦啦隊股長》上帝主控台 👁️</h1>
         <div style="font-size: 26px; color: #ffdd67; font-weight: bold;">房間代碼：<span id="host-room-id">----</span></div>
         <hr style="border-color:#333; margin: 12px 0;">
+        
+        <div style="background: #222; padding: 15px; border-radius: 8px; border: 1px solid var(--gold); margin-bottom: 15px;">
+            <p style="margin: 0 0 10px 0; color: var(--gold); font-weight: bold; text-align: left;">✍️ 輸入本輪少數決題目：</p>
+            <input type="text" id="host-question-input" placeholder="例如：我再也不拍片了。 (留空則不顯示)" style="width: 90%; margin-bottom: 10px;">
+            <button class="btn" style="background: #eb984e; color: #000; padding: 10px; font-size: 16px; margin: 0; width: 50%;" onclick="publishQuestion()">📢 發布本輪題目</button>
+            <div id="host-current-q-display" style="margin-top: 10px; color: #aaa; font-size: 14px;">目前全場顯示題目：無</div>
+        </div>
+
         <p style="margin: 5px 0;">當前生存：<span id="host-alive-count" style="color:var(--gold); font-size:20px; font-weight:bold;">0</span> 人 | 已投：<span id="host-voted-count" style="color:#52be80; font-size:20px; font-weight:bold;">0</span> 人</p>
         
         <button class="btn" style="background:#52be80;" onclick="settleRound()">📢 停止卡位！現場開票！</button>
-        <button class="btn" style="background:#eb984e; color:#000;" onclick="nextRound()">🎬 準備下一題！重置投票按鈕</button>
+        <button class="btn" style="background:#2d2d2d; border: 1px solid #555;" onclick="nextRound()">🎬 準備下一題！清空題目與按鈕</button>
         <button class="btn" style="background:#555;" onclick="resetGame()">🔄 全員復活全局重來</button>
         
         <div class="live-panel">
             <div class="live-stats">
-                📈 <b>即時票數統計：</b> 
+                📈 <b>即時票數統計（開票前）：</b> <br>
                 <span style="color:#5dade2;">YES: <b id="live-yes-val">0</b> 票</span> | 
                 <span style="color:#f1948a;">NO: <b id="live-no-val">0</b> 票</span><br>
                 👑 <span style="color:#ffdd67; font-weight:bold;">目前少數領先方：<span id="live-leading-side">無人投票</span></span>
@@ -76,7 +89,6 @@
                     <div id="wall-no" class="player-wall"></div>
                 </div>
             </div>
-
             <div class="zone" style="background:#161616; margin-bottom: 10px;">
                 <div class="zone-title" style="color:#aaa;">🤔 還在思考中...</div>
                 <div id="wall-think" class="player-wall"></div>
@@ -86,22 +98,24 @@
                 <div id="wall-dead" class="player-wall"></div>
             </div>
         </div>
-
-        <div id="host-result" class="box hidden" style="background:#000; margin-top:15px; border-color:#52be80; max-width:100%;">
-            <h3 id="result-winner-text" style="color:var(--gold); margin:0 0 10px 0;"></h3>
-            <p style="margin:5px 0;">最終 YES: <span id="result-yes-count" style="color:#3498db; font-weight:bold;">0</span> 人</p>
-            <p style="margin:5px 0;">最終 NO: <span id="result-no-count" style="color:#e74c3c; font-weight:bold;">0</span> 人</p>
-        </div>
     </div>
 
     <div id="player-screen" class="box hidden">
         <h1>參賽者: <span id="display-name" style="color:var(--gold);"></span></h1>
         <div id="player-status" class="badge">遊戲載入中...</div>
         
+        <div id="player-live-counter" style="color:#aaa; font-size:15px; font-weight:bold; margin-bottom:15px;">
+            👥 現場下注進度：<span id="p-voted-count" style="color:#52be80;">0</span> / <span id="p-alive-count">0</span> 人已鎖定
+        </div>
+        
+        <div id="player-question-board" class="q-board q-waiting">🎬 主辦人正在瘋狂出題中，請稍候...</div>
+        
+        <div id="my-focus-result" class="my-focus-zone hidden"></div>
+        
         <div id="vote-area" class="hidden">
             <p style="color:#aaa; font-weight:bold;">請做出你的少數決抉擇：</p>
-            <button class="btn btn-yes" onclick="castVote('Yes')">YES</button>
-            <button class="btn btn-no" onclick="castVote('No')">NO</button>
+            <button class="btn btn-yes" onclick="castVote('Yes')">⭕ 對 / 認同</button>
+            <button class="btn btn-no" onclick="castVote('No')">❌ 錯 / 不認同</button>
         </div>
         
         <div id="wait-msg" class="hidden">
@@ -111,16 +125,30 @@
         
         <div id="dead-msg" class="hidden">
             <div style="color:#ec7063; font-size:24px; font-weight:bold; margin: 20px 0;">🎬 恭喜你殺青領便當！</div>
-            <p style="color:#aaa;">您在本輪不幸成為多數方，請在台下好好享受酒水，幫場上的夥伴加油！</p>
+            <p style="color:#aaa;">您已被淘汰。請在台下好好享受酒水！</p>
+        </div>
+
+        <div id="player-result-box" class="live-panel hidden" style="margin-top: 25px; border-color: var(--gold);">
+            <div id="player-result-title" class="live-stats" style="background: #111; font-weight: bold; border-left-color: #52be80;">
+                📊 上一輪開票結果
+            </div>
+            <div class="split-zone">
+                <div class="zone" style="border-top: 3px solid #3498db;">
+                    <div id="player-yes-title" class="zone-title" style="color:#3498db;">🔵 YES (0票)</div>
+                    <div id="player-wall-yes" class="player-wall"></div>
+                </div>
+                <div class="zone" style="border-top: 3px solid #e74c3c;">
+                    <div id="player-no-title" class="zone-title" style="color:#e74c3c;">🔴 NO (0票)</div>
+                    <div id="player-wall-no" class="player-wall"></div>
+                </div>
+            </div>
         </div>
     </div>
 
     <script>
         // 🛠️ 請在下方引號內貼上你的 Firebase 即時資料庫網址
         const FIREBASE_DB_URL = "https://lala-party-2026-default-rtdb.firebaseio.com/";
-        
-        // 🔑 主辦人認證密碼
-        const HOST_PASSWORD = "lalala2026";
+        const HOST_PASSWORD = "lala2026";
 
         firebase.initializeApp({ databaseURL: FIREBASE_DB_URL });
         const db = firebase.database();
@@ -129,8 +157,8 @@
 
         function chooseRole(role) {
             if(role === 'host') {
-                const pass = prompt("請输入主辦人認證密碼：");
-                if(pass !== HOST_PASSWORD) { alert("密碼錯誤！你不是真的主辦人吼～"); return; }
+                const pass = prompt("請輸入主辦人認證密碼：");
+                if(pass !== HOST_PASSWORD) { alert("密碼錯誤！"); return; }
             }
             currentRole = role;
             document.getElementById('role-screen').classList.add('hidden');
@@ -157,7 +185,7 @@
             
             if(currentRole === 'host') {
                 roomRef.remove().then(() => {
-                    roomRef.child('gameStatus').set({ roundState: 'voting', winner: '', yesCount: 0, noCount: 0 });
+                    roomRef.child('gameStatus').set({ roundState: 'waiting_question', currentQuestion: '', winner: '', yesCount: 0, noCount: 0, yesList: '', noList: '', winText: '' });
                     document.getElementById('input-screen').classList.add('hidden');
                     document.getElementById('host-screen').classList.remove('hidden');
                     document.getElementById('host-room-id').innerText = myRoomCode;
@@ -177,106 +205,108 @@
             }
         }
 
-        // 👑 【主辦人楚河漢界監聽核心】
+        function publishQuestion() {
+            const qText = document.getElementById('host-question-input').value.trim();
+            if(!qText) return alert('請輸入有效的題目內容！');
+            
+            roomRef.child('gameStatus').update({
+                roundState: 'voting',
+                currentQuestion: qText,
+                winner: '', winText: ''
+            });
+            document.getElementById('host-current-q-display').innerText = "目前全場顯示題目：" + qText;
+            alert("題目發布成功！台下已同步解鎖按鈕。");
+        }
+
         function startHostListening() {
             roomRef.child('players').on('value', (snapshot) => {
                 const players = snapshot.val() || {};
-                
-                // 清空四個區域的 HTML
                 const wYes = document.getElementById('wall-yes');
                 const wNo = document.getElementById('wall-no');
                 const wThink = document.getElementById('wall-think');
                 const wDead = document.getElementById('wall-dead');
                 wYes.innerHTML = ''; wNo.innerHTML = ''; wThink.innerHTML = ''; wDead.innerHTML = '';
                 
-                let aliveCount = 0; let votedCount = 0;
-                let yesVotes = 0; let noVotes = 0;
+                let aliveCount = 0; let votedCount = 0; let yesVotes = 0; let noVotes = 0;
                 
                 for(let id in players) {
                     const p = players[id];
                     if(p.alive) aliveCount++;
                     
                     if(!p.alive) {
-                        // 💀 領便當區
                         wDead.innerHTML += `<div class="p-card p-dead">${p.name}</div>`;
                     } else if(p.voted) {
                         votedCount++;
-                        if(p.choice === 'Yes') {
-                            yesVotes++;
-                            wYes.innerHTML += `<div class="p-card p-alive-yes">${p.name}</div>`;
-                        } else if(p.choice === 'No') {
-                            noVotes++;
-                            wNo.innerHTML += `<div class="p-card p-alive-no">${p.name}</div>`;
-                        }
+                        if(p.choice === 'Yes') { yesVotes++; wYes.innerHTML += `<div class="p-card p-alive-yes">${p.name}</div>`; } 
+                        else if(p.choice === 'No') { noVotes++; wNo.innerHTML += `<div class="p-card p-alive-no">${p.name}</div>`; }
                     } else {
-                        // 🤔 思考中區
                         wThink.innerHTML += `<div class="p-card p-alive-wait">${p.name}</div>`;
                     }
                 }
                 
-                // 數據同步到看板上
                 document.getElementById('host-alive-count').innerText = aliveCount;
                 document.getElementById('host-voted-count').innerText = votedCount;
                 document.getElementById('live-yes-val').innerText = yesVotes;
                 document.getElementById('live-no-val').innerText = noVotes;
                 
-                // 💡 計算誰是目前的少數領先方
                 let leadingTxt = '無人投票';
                 if (yesVotes > 0 || noVotes > 0) {
-                    if (yesVotes === noVotes) {
-                        leadingTxt = '⚖️ 雙方平手 (目前全員安全)';
-                    } else {
-                        leadingTxt = yesVotes < noVotes ? '🔵 YES 陣營 (少數領先！)' : '🔴 NO 陣營 (少數領先！)';
-                    }
+                    if (yesVotes === noVotes) { leadingTxt = '⚖️ 雙方平手 (目前全員安全)'; } 
+                    else { leadingTxt = yesVotes < noVotes ? '🔵 YES 陣營 (少數領先！)' : '🔴 NO 陣營 (少數領先！)'; }
                 }
                 document.getElementById('live-leading-side').innerText = leadingTxt;
-                
-                // 防呆文字
-                if(!wYes.innerHTML) wYes.innerHTML = '<div style="color:#444; font-size:12px; padding:5px;">暫無人選擇</div>';
-                if(!wNo.innerHTML) wNo.innerHTML = '<div style="color:#444; font-size:12px; padding:5px;">暫無人選擇</div>';
-                if(!wThink.innerHTML) wThink.innerHTML = '<div style="color:#444; font-size:12px; padding:5px;">全員皆已鎖定！</div>';
-                if(!wDead.innerHTML) wDead.innerHTML = '<div style="color:#444; font-size:12px; padding:5px;">目前尚無人淘汰</div>';
             });
         }
 
         function settleRound() {
-            roomRef.child('players').once('value', (snapshot) => {
-                const players = snapshot.val() || {};
-                let yesCount = 0; let noCount = 0;
+            roomRef.child('gameStatus/currentQuestion').once('value', (qSnap) => {
+                const curQ = qSnap.val() || '本輪題目';
                 
-                for(let id in players) {
-                    if(players[id].alive && players[id].voted) {
-                        if(players[id].choice === 'Yes') yesCount++;
-                        if(players[id].choice === 'No') noCount++;
-                    }
-                }
-                
-                let winSide = 'Both';
-                let winText = '⚖ 本輪平手！全員生存！';
-                if(yesCount !== noCount) {
-                    winSide = yesCount < noCount ? 'Yes' : 'No';
-                    winText = `🎉 開票結果：${winSide === 'Yes' ? 'YES' : 'NO'} 是少數方！順利晉級！`;
-                }
-                
-                document.getElementById('result-winner-text').innerText = winText;
-                document.getElementById('result-yes-count').innerText = yesCount;
-                document.getElementById('result-no-count').innerText = noCount;
-                document.getElementById('host-result').classList.remove('hidden');
-                
-                for(let id in players) {
-                    if(players[id].alive) {
-                        if(winSide !== 'Both' && players[id].choice !== winSide) {
-                            roomRef.child('players').child(id).update({ alive: false });
+                roomRef.child('players').once('value', (snapshot) => {
+                    const players = snapshot.val() || {};
+                    let yesCount = 0; let noCount = 0;
+                    let yesArr = []; let noArr = [];
+                    
+                    for(let id in players) {
+                        if(players[id].alive && players[id].voted) {
+                            if(players[id].choice === 'Yes') { yesCount++; yesArr.push(players[id].name); }
+                            if(players[id].choice === 'No') { noCount++; noArr.push(players[id].name); }
                         }
                     }
-                }
-                roomRef.child('gameStatus').update({ roundState: 'revealed', winner: winSide, yesCount: yesCount, noCount: noCount });
+                    
+                    let winSide = 'Both';
+                    let winText = `⚖️ 題目【${curQ}】開票平手！全員生存！`;
+                    if(yesCount !== noCount) {
+                        winSide = yesCount < noCount ? 'Yes' : 'No';
+                        winText = `🎉 題目【${curQ}】少數方【${winSide === 'Yes' ? 'YES' : 'NO'}】順利晉級！`;
+                    }
+                    
+                    for(let id in players) {
+                        if(players[id].alive) {
+                            if(winSide !== 'Both' && players[id].choice !== winSide) {
+                                roomRef.child('players').child(id).update({ alive: false });
+                            }
+                        }
+                    }
+
+                    roomRef.child('gameStatus').update({ 
+                        roundState: 'revealed', 
+                        winner: winSide, 
+                        yesCount: yesCount, 
+                        noCount: noCount,
+                        yesList: yesArr.join(','),
+                        noList: noArr.join(','),
+                        winText: winText
+                    });
+                });
             });
         }
 
         function nextRound() {
-            document.getElementById('host-result').classList.add('hidden');
-            roomRef.child('gameStatus').update({ roundState: 'voting', winner: '', yesCount: 0, noCount: 0 });
+            document.getElementById('host-question-input').value = '';
+            document.getElementById('host-current-q-display').innerText = "目前全場顯示題目：無";
+            
+            roomRef.child('gameStatus').update({ roundState: 'waiting_question', currentQuestion: '', winner: '', yesCount: 0, noCount: 0 });
             roomRef.child('players').once('value', (snapshot) => {
                 const players = snapshot.val() || {};
                 for(let id in players) { roomRef.child('players').child(id).update({ choice: '', voted: false }); }
@@ -285,8 +315,9 @@
 
         function resetGame() {
             if(!confirm("確定要讓死去的劇組夥伴全體復活，重新來過嗎？")) return;
-            document.getElementById('host-result').classList.add('hidden');
-            roomRef.child('gameStatus').update({ roundState: 'voting', winner: '', yesCount: 0, noCount: 0 });
+            document.getElementById('host-question-input').value = '';
+            document.getElementById('host-current-q-display').innerText = "目前全場顯示題目：無";
+            roomRef.child('gameStatus').update({ roundState: 'waiting_question', currentQuestion: '', winner: '', yesCount: 0, noCount: 0, yesList: '', noList: '', winText: '' });
             roomRef.child('players').once('value', (snapshot) => {
                 const players = snapshot.val() || {};
                 for(let id in players) { roomRef.child('players').child(id).update({ choice: '', voted: false, alive: true }); }
@@ -294,50 +325,122 @@
         }
 
         function startPlayerListening() {
-            roomRef.child('players').child(myPlayerId).on('value', (snapshot) => {
-                const me = snapshot.val();
-                if(!me) return;
-                
-                if(!me.alive) {
-                    document.getElementById('vote-area').classList.add('hidden');
-                    document.getElementById('wait-msg').classList.add('hidden');
-                    document.getElementById('dead-msg').classList.remove('hidden');
-                    document.getElementById('player-status').innerText = "🎬 已失去資格";
-                    document.getElementById('player-status').style.background = "#78281f";
-                } else {
-                    document.getElementById('dead-msg').classList.add('hidden');
-                    if(me.voted) {
-                        document.getElementById('vote-area').classList.add('hidden');
-                        document.getElementById('wait-msg').classList.remove('hidden');
-                        document.getElementById('player-status').innerText = "⌛ 抉擇已鎖定";
-                        document.getElementById('player-status').style.background = "#196f3d";
-                    } else {
-                        roomRef.child('gameStatus/roundState').once('value', (snap) => {
-                            if(snap.val() === 'voting') {
-                                document.getElementById('vote-area').classList.remove('hidden');
-                                document.getElementById('wait-msg').classList.add('hidden');
-                                document.getElementById('player-status').innerText = "⚡ 請選擇 YES 或 NO";
-                                document.getElementById('player-status').style.background = "#2d2d2d";
-                            } else {
-                                document.getElementById('vote-area').classList.add('hidden');
-                                document.getElementById('wait-msg').classList.remove('hidden');
-                                document.getElementById('player-status').innerText = "⌛ 等待下一輪開始";
-                            }
-                        });
+            // 1. 讓參賽者手機端實時同步監聽全場投票總人數
+            roomRef.child('players').on('value', (snapshot) => {
+                const players = snapshot.val() || {};
+                let aliveTotal = 0; let votedTotal = 0;
+                for(let id in players) {
+                    if(players[id].alive) {
+                        aliveTotal++;
+                        if(players[id].voted) votedTotal++;
                     }
                 }
+                document.getElementById('p-alive-count').innerText = aliveTotal;
+                document.getElementById('p-voted-count').innerText = votedTotal;
             });
 
-            roomRef.child('gameStatus/roundState').on('value', (state) => {
-                if(state === 'voting') {
+            // 2. 監聽大局狀態 (題目發布同步、按鈕開關、名單渲染)
+            roomRef.child('gameStatus').on('value', (snapshot) => {
+                const status = snapshot.val() || {};
+                const qBoard = document.getElementById('player-question-board');
+                const voteArea = document.getElementById('vote-area');
+                const waitMsg = document.getElementById('wait-msg');
+                const deadMsg = document.getElementById('dead-msg');
+                const resBox = document.getElementById('player-result-box');
+                const focusBox = document.getElementById('my-focus-result');
+                const pStatus = document.getElementById('player-status');
+                
+                // A. 處理題目看板內容
+                if (status.currentQuestion) {
+                    qBoard.innerText = "❓ 當前題目：" + status.currentQuestion;
+                    qBoard.classList.remove('q-waiting');
+                } else {
+                    qBoard.innerText = "🎬 主辦人正在瘋狂出題中，請稍候...";
+                    qBoard.classList.add('q-waiting');
+                }
+
+                // B. 根據主辦人切換的遊戲狀態渲染介面
+                if(status.roundState === 'waiting_question') {
+                    // 主辦人還沒出題：隱藏投票跟所有開票結果，顯示出題中
+                    voteArea.classList.add('hidden');
+                    waitMsg.classList.add('hidden');
+                    deadMsg.classList.add('hidden');
+                    resBox.classList.add('hidden');
+                    focusBox.classList.add('hidden');
+                    
                     roomRef.child('players').child(myPlayerId).once('value', (snap) => {
-                        if(snap.val() && snap.val().alive) {
-                            document.getElementById('vote-area').classList.remove('hidden');
-                            document.getElementById('wait-msg').classList.add('hidden');
-                            document.getElementById('player-status').innerText = "⚡ 請選擇 YES 或 NO";
-                            document.getElementById('player-status').style.background = "#2d2d2d";
+                        const me = snap.val() || {};
+                        if(!me.alive) {
+                            pStatus.innerText = "🎬 已失去資格 (殺青)"; pStatus.style.background = "#78281f";
+                        } else {
+                            pStatus.innerText = "⌛ 等待主辦人出題"; pStatus.style.background = "#2d2d2d";
                         }
                     });
+
+                } else if(status.roundState === 'voting') {
+                    // 主辦人出題了！開放投票
+                    resBox.classList.add('hidden');
+                    focusBox.classList.add('hidden');
+                    deadMsg.classList.add('hidden');
+                    
+                    roomRef.child('players').child(myPlayerId).once('value', (snap) => {
+                        const me = snap.val() || {};
+                        if(!me.alive) {
+                            voteArea.classList.add('hidden'); waitMsg.classList.add('hidden');
+                            pStatus.innerText = "🎬 已失去資格 (殺青)"; pStatus.style.background = "#78281f";
+                        } else if(me.voted) {
+                            voteArea.classList.add('hidden'); waitMsg.classList.remove('hidden');
+                            pStatus.innerText = "✓ 抉擇已鎖定"; pStatus.style.background = "#196f3d";
+                        } else {
+                            voteArea.classList.remove('hidden'); waitMsg.classList.add('hidden');
+                            pStatus.innerText = "⚡ 請選擇 YES 或 NO"; pStatus.style.background = "#1f618d";
+                        }
+                    });
+
+                } else if(status.roundState === 'revealed') {
+                    // 主辦人按下開票！
+                    voteArea.classList.add('hidden');
+                    waitMsg.classList.add('hidden');
+                    deadMsg.classList.add('hidden');
+                    pStatus.innerText = "🏁 本輪結果已揭曉"; pStatus.style.background = "#d4ac0d"; pStatus.style.color = "#000";
+                    
+                    // 渲染置頂區
+                    roomRef.child('players').child(myPlayerId).once('value', (pSnap) => {
+                        const me = pSnap.val() || {};
+                        let myChoiceText = me.choice === 'Yes' ? '⭕ 對 / 認同 (YES)' : '❌ 錯 / 不認同 (NO)';
+                        if(!me.voted) myChoiceText = '🤔 沒投票 / 棄權';
+                        
+                        focusBox.classList.remove('hidden');
+                        if (status.winner === 'Both') {
+                            focusBox.style.background = "#3498db"; focusBox.style.color = "#fff";
+                            focusBox.innerHTML = `⚖️ 本輪平手！<br>您選擇了：${myChoiceText}<br>✨ 全員安全存活！`;
+                        } else if (me.choice === status.winner) {
+                            focusBox.style.background = "#2ecc71"; focusBox.style.color = "#fff";
+                            focusBox.innerHTML = `🎉 您成功通靈！<br>您選擇了：${myChoiceText}<br>✨ 恭喜晉級下一輪！`;
+                        } else {
+                            focusBox.style.background = "#e74c3c"; focusBox.style.color = "#fff";
+                            focusBox.innerHTML = `💀 您不幸淘汰！<br>您選擇了：${myChoiceText}<br>🎬 恭喜您殺青領便當囉！`;
+                        }
+                    });
+
+                    // 渲染點名牆
+                    document.getElementById('player-result-title').innerHTML = `📊 全場開票結果<br><span style="font-size:13px;color:var(--gold); font-weight:normal;">${status.winText}</span>`;
+                    document.getElementById('player-yes-title').innerText = `🔵 YES (${status.yesCount}票)`;
+                    document.getElementById('player-no-title').innerText = `🔴 NO (${status.noCount}票)`;
+                    
+                    const pWallYes = document.getElementById('player-wall-yes');
+                    const pWallNo = document.getElementById('player-wall-no');
+                    pWallYes.innerHTML = ''; pWallNo.innerHTML = '';
+                    
+                    if(status.yesList) {
+                        status.yesList.split(',').forEach(name => { pWallYes.innerHTML += `<div class="p-card p-alive-yes" style="font-size:12px;">${name}</div>`; });
+                    } else { pWallYes.innerHTML = '<div style="color:#444;font-size:12px;">0人</div>'; }
+                    
+                    if(status.noList) {
+                        status.noList.split(',').forEach(name => { pWallNo.innerHTML += `<div class="p-card p-alive-no" style="font-size:12px;">${name}</div>`; });
+                    } else { pWallNo.innerHTML = '<div style="color:#444;font-size:12px;">0人</div>'; }
+                    
+                    resBox.classList.remove('hidden');
                 }
             });
         }
