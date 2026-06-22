@@ -71,9 +71,18 @@
         <button class="btn" style="background:#eb984e; border: 1px solid #555;" onclick="nextRound()">🎬 準備下一題！清空題目與按鈕</button>
         <button class="btn" style="background:#555;" onclick="resetGame()">🔄 全員復活全局重來</button>
         
+        <div class="live-panel" style="background: #111; border: 1px dashed var(--gold);">
+            <div class="live-stats" style="margin-bottom:0;">
+                📈 <b>即時票數統計：</b> <br>
+                <span style="color:#5dade2; font-size: 20px; font-weight: bold;">YES: <b id="live-yes-val">0</b> 票</span> | 
+                <span style="color:#f1948a; font-size: 20px; font-weight: bold;">NO: <b id="live-no-val">0</b> 票</span><br>
+                👑 <span style="color:#ffdd67; font-weight:bold; font-size: 16px;">目前少數領先方：<span id="live-leading-side">無人投票</span></span>
+            </div>
+        </div>
+
         <div id="host-revealed-board" class="live-panel hidden" style="border: 2px solid var(--gold);">
             <div id="host-revealed-title" class="live-stats" style="background: #111; font-weight: bold; color: #ffdd67;">
-                🏁 上一輪定格開票結果
+                🏁 本輪開票定格結果
             </div>
             <div class="split-zone">
                 <div class="zone" style="border-top: 3px solid #3498db; background: #0a1520;">
@@ -230,7 +239,6 @@
         }
 
         function startHostListening() {
-            // 動態實時監聽：不論生死、投票進度，隨時渲染
             roomRef.child('players').on('value', (snapshot) => {
                 const players = snapshot.val() || {};
                 const wYes = document.getElementById('wall-yes');
@@ -239,7 +247,7 @@
                 const wDead = document.getElementById('wall-dead');
                 wYes.innerHTML = ''; wNo.innerHTML = ''; wThink.innerHTML = ''; wDead.innerHTML = '';
                 
-                let aliveCount = 0; let votedCount = 0;
+                let aliveCount = 0; let votedCount = 0; let yesVotes = 0; let noVotes = 0;
                 
                 for(let id in players) {
                     const p = players[id];
@@ -249,23 +257,33 @@
                         wDead.innerHTML += `<div class="p-card p-dead">${p.name}</div>`;
                     } else if(p.voted) {
                         votedCount++;
-                        if(p.choice === 'Yes') { wYes.innerHTML += `<div class="p-card p-alive-yes">${p.name}</div>`; } 
-                        else if(p.choice === 'No') { wNo.innerHTML += `<div class="p-card p-alive-no">${p.name}</div>`; }
+                        if(p.choice === 'Yes') { yesVotes++; wYes.innerHTML += `<div class="p-card p-alive-yes">${p.name}</div>`; } 
+                        else if(p.choice === 'No') { noVotes++; wNo.innerHTML += `<div class="p-card p-alive-no">${p.name}</div>`; }
                     } else {
                         wThink.innerHTML += `<div class="p-card p-alive-wait">${p.name}</div>`;
                     }
                 }
+                
                 document.getElementById('host-alive-count').innerText = aliveCount;
                 document.getElementById('host-voted-count').innerText = votedCount;
+                
+                // ✨ 實時更新回計分板數據
+                document.getElementById('live-yes-val').innerText = yesVotes;
+                document.getElementById('live-no-val').innerText = noVotes;
+                
+                let leadingTxt = '無人投票';
+                if (yesVotes > 0 || noVotes > 0) {
+                    if (yesVotes === noVotes) { leadingTxt = '⚖️ 雙方平手 (目前全員安全)'; } 
+                    else { leadingTxt = yesVotes < noVotes ? '🔵 YES 陣營 (少數領先！)' : '🔴 NO 陣營 (少數領先！)'; }
+                }
+                document.getElementById('live-leading-side').innerText = leadingTxt;
             });
 
-            // ✨ 主辦人端大局狀態監聽：專門用來在開票時渲染「定格名單」
             roomRef.child('gameStatus').on('value', (snapshot) => {
                 const status = snapshot.val() || {};
                 const hBoard = document.getElementById('host-revealed-board');
                 
                 if(status.roundState === 'revealed') {
-                    // 渲染上帝控制台的「定格戰犯牆」
                     document.getElementById('host-revealed-title').innerHTML = `🏁 本輪開票定格結果<br><span style="font-size:14px;color:var(--gold); font-weight:normal;">${status.winText}</span>`;
                     document.getElementById('host-rev-yes-title').innerText = `🔵 YES 陣營 (${status.yesCount}票)`;
                     document.getElementById('host-rev-no-title').innerText = `🔴 NO 陣營 (${status.noCount}票)`;
@@ -275,16 +293,16 @@
                     hWallYes.innerHTML = ''; hWallNo.innerHTML = '';
                     
                     if(status.yesList) {
-                        status.yesList.split(',').forEach(name => { hWallYes.innerHTML += `<div class="p-card p-alive-yes">${name}</div>`; });
+                        status.yesList.split('、').forEach(name => { hWallYes.innerHTML += `<div class="p-card p-alive-yes">${name}</div>`; });
                     } else { hWallYes.innerHTML = '<div style="color:#555;font-size:12px;">0人</div>'; }
                     
                     if(status.noList) {
-                        status.noList.split(',').forEach(name => { hWallNo.innerHTML += `<div class="p-card p-alive-no">${name}</div>`; });
+                        status.noList.split('、').forEach(name => { hWallNo.innerHTML += `<div class="p-card p-alive-no">${name}</div>`; });
                     } else { hWallNo.innerHTML = '<div style="color:#555;font-size:12px;">0人</div>'; }
                     
-                    hBoard.classList.remove('hidden'); // 秀出定格板
+                    hBoard.classList.remove('hidden');
                 } else {
-                    hBoard.classList.add('hidden'); // 不是開票狀態就收起來
+                    hBoard.classList.add('hidden');
                 }
             });
         }
@@ -312,17 +330,15 @@
                         winText = `🎉 題目【${curQ}】少數方【${winSide === 'Yes' ? 'YES' : 'NO'}】勝出！多數方淘汰！`;
                     }
                     
-                    // ✨ 核心修正：先把此時此刻誰投什麼「定格寫入資料庫」
                     roomRef.child('gameStatus').update({ 
                         roundState: 'revealed', 
                         winner: winSide, 
                         yesCount: yesCount, 
                         noCount: noCount,
-                        yesList: yesArr.join('、'), // 用、隔開人名
+                        yesList: yesArr.join('、'),
                         noList: noArr.join('、'),
                         winText: winText
                     }).then(() => {
-                        // 寫完定格名單後，再把多數方的人踢到淘汰區去
                         for(let id in players) {
                             if(players[id].alive) {
                                 if(winSide !== 'Both' && players[id].choice !== winSide) {
