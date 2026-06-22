@@ -154,6 +154,7 @@
         const db = firebase.database();
 
         let currentRole = ''; let roomRef = null; let myRoomCode = ''; let myPlayerId = '';
+        let globalRoundState = 'waiting_question'; // 儲存全域的大局狀態
 
         function chooseRole(role) {
             if(role === 'host') {
@@ -339,9 +340,36 @@
                 document.getElementById('p-voted-count').innerText = votedTotal;
             });
 
-            // 2. 監聽大局狀態與個人投票狀態
+            // ✨ 2. 新增：獨立監聽「我自己的個人狀態」，只要一發現 voted 變成 true，按鈕就無條件當場蒸發！
+            roomRef.child('players').child(myPlayerId).on('value', (snapshot) => {
+                const me = snapshot.val();
+                if(!me) return;
+                
+                const voteArea = document.getElementById('vote-area');
+                const waitMsg = document.getElementById('wait-msg');
+                const pStatus = document.getElementById('player-status');
+                
+                if(!me.alive) {
+                    voteArea.classList.add('hidden');
+                    waitMsg.classList.add('hidden');
+                    pStatus.innerText = "🎬 已失去資格 (殺青)"; pStatus.style.background = "#78281f";
+                    pStatus.style.color = "#fff";
+                } else {
+                    // 如果這題處於投票階段，且我已經投票了
+                    if(me.voted && globalRoundState === 'voting') {
+                        voteArea.classList.add('hidden'); 
+                        waitMsg.classList.remove('hidden');
+                        pStatus.innerText = "✓ 抉擇已鎖定"; pStatus.style.background = "#196f3d";
+                        pStatus.style.color = "#fff";
+                    }
+                }
+            });
+
+            // 3. 監聽大局狀態
             roomRef.child('gameStatus').on('value', (snapshot) => {
                 const status = snapshot.val() || {};
+                globalRoundState = status.roundState; // 記錄到全域變數中
+                
                 const qBoard = document.getElementById('player-question-board');
                 const voteArea = document.getElementById('vote-area');
                 const waitMsg = document.getElementById('wait-msg');
@@ -359,9 +387,8 @@
                     qBoard.classList.add('q-waiting');
                 }
 
-                // B. 核心畫面邏輯
+                // B. 核心畫面切換
                 if(status.roundState === 'waiting_question') {
-                    // 主辦人還沒出題：隱藏按鈕、鎖定訊息與開票框
                     voteArea.classList.add('hidden');
                     waitMsg.classList.add('hidden');
                     deadMsg.classList.add('hidden');
@@ -371,14 +398,13 @@
                     roomRef.child('players').child(myPlayerId).once('value', (snap) => {
                         const me = snap.val() || {};
                         if(!me.alive) {
-                            pStatus.innerText = "🎬 已失去資格 (殺青)"; pStatus.style.background = "#78281f";
+                            pStatus.innerText = "🎬 已失去資格 (殺青)"; pStatus.style.background = "#78281f"; pStatus.style.color = "#fff";
                         } else {
-                            pStatus.innerText = "⌛ 等待主辦人出題"; pStatus.style.background = "#2d2d2d";
+                            pStatus.innerText = "⌛ 等待主辦人出題"; pStatus.style.background = "#2d2d2d"; pStatus.style.color = "#fff";
                         }
                     });
 
                 } else if(status.roundState === 'voting') {
-                    // 核心修改處：投票進行中，根據自己有沒有投票來決定按鈕「顯示」還是「消失」
                     resBox.classList.add('hidden');
                     focusBox.classList.add('hidden');
                     deadMsg.classList.add('hidden');
@@ -386,24 +412,18 @@
                     roomRef.child('players').child(myPlayerId).once('value', (snap) => {
                         const me = snap.val() || {};
                         if(!me.alive) {
-                            voteArea.classList.add('hidden'); 
-                            waitMsg.classList.add('hidden');
-                            pStatus.innerText = "🎬 已失去資格 (殺青)"; pStatus.style.background = "#78281f";
+                            voteArea.classList.add('hidden'); waitMsg.classList.add('hidden');
+                            pStatus.innerText = "🎬 已失去資格 (殺青)"; pStatus.style.background = "#78281f"; pStatus.style.color = "#fff";
                         } else if(me.voted) {
-                            // ✨ 已經投過票：按鈕消失！顯示鎖定勾勾
-                            voteArea.classList.add('hidden'); 
-                            waitMsg.classList.remove('hidden');
-                            pStatus.innerText = "✓ 抉擇已鎖定"; pStatus.style.background = "#196f3d";
+                            voteArea.classList.add('hidden'); waitMsg.classList.remove('hidden');
+                            pStatus.innerText = "✓ 抉擇已鎖定"; pStatus.style.background = "#196f3d"; pStatus.style.color = "#fff";
                         } else {
-                            // ✨ 還沒投票：按鈕顯示！隱藏鎖定勾勾
-                            voteArea.classList.remove('hidden'); 
-                            waitMsg.classList.add('hidden');
-                            pStatus.innerText = "⚡ 請選擇 YES 或 NO"; pStatus.style.background = "#1f618d";
+                            voteArea.classList.remove('hidden'); waitMsg.classList.add('hidden');
+                            pStatus.innerText = "⚡ 請選擇 YES 或 NO"; pStatus.style.background = "#1f618d"; pStatus.style.color = "#fff";
                         }
                     });
 
                 } else if(status.roundState === 'revealed') {
-                    // 主辦人開票
                     voteArea.classList.add('hidden');
                     waitMsg.classList.add('hidden');
                     deadMsg.classList.add('hidden');
@@ -450,8 +470,20 @@
             });
         }
 
-        // 投完票立刻更新至資料庫，Firebase 的即時回傳會觸發上面的監聽，瞬間讓按鈕消失
-        function castVote(choice) { roomRef.child('players').child(myPlayerId).update({ choice: choice, voted: true }); }
+        // ✨ 核心修正：點擊的當下「不等資料庫回傳」，前端直接暴力隱藏按鈕、亮出鎖定訊息！
+        function castVote(choice) { 
+            // 1. 0秒差立即切換本地畫面
+            document.getElementById('vote-area').classList.add('hidden');
+            document.getElementById('wait-msg').classList.remove('hidden');
+            
+            const pStatus = document.getElementById('player-status');
+            pStatus.innerText = "✓ 抉擇已鎖定"; 
+            pStatus.style.background = "#196f3d";
+            pStatus.style.color = "#fff";
+
+            // 2. 背景默默更新給 Firebase 
+            roomRef.child('players').child(myPlayerId).update({ choice: choice, voted: true }); 
+        }
     </script>
 </body>
 </html>
