@@ -13,7 +13,7 @@
         h1 { color: var(--gold); font-size: 26px; margin-top:0; letter-spacing: 1px; }
         .btn { width: 90%; padding: 16px; margin: 12px 0; font-size: 19px; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; color: white; }
         .btn-yes { background: var(--yes); } .btn-no { background: var(--no); }
-        .hidden { display: none; }
+        .hidden { display: none !important; }
         .badge { background: #2d2d2d; padding: 6px 12px; border-radius: 20px; font-size: 13px; display: inline-block; margin-bottom: 10px; }
         input[type="text"], input[type="number"] { width: 85%; padding: 14px; font-size: 18px; text-align: center; border-radius: 8px; margin-bottom: 12px; background: #000; color: #fff; border: 1px solid var(--gold); }
         
@@ -60,7 +60,7 @@
         
         <div style="background: #222; padding: 15px; border-radius: 8px; border: 1px solid var(--gold); margin-bottom: 15px;">
             <p style="margin: 0 0 10px 0; color: var(--gold); font-weight: bold; text-align: left;">✍️ 輸入本輪少數決題目：</p>
-            <input type="text" id="host-question-input" placeholder="例如：我再也不拍片了。 (留空則不顯示)" style="width: 90%; margin-bottom: 10px;">
+            <input type="text" id="host-question-input" placeholder="例如：我討厭吃冷便當。 (留空則不顯示)" style="width: 90%; margin-bottom: 10px;">
             <button class="btn" style="background: #eb984e; color: #000; padding: 10px; font-size: 16px; margin: 0; width: 50%;" onclick="publishQuestion()">📢 發布本輪題目</button>
             <div id="host-current-q-display" style="margin-top: 10px; color: #aaa; font-size: 14px;">目前全場顯示題目：無</div>
         </div>
@@ -68,7 +68,7 @@
         <p style="margin: 5px 0;">當前生存：<span id="host-alive-count" style="color:var(--gold); font-size:20px; font-weight:bold;">0</span> 人 | 已投：<span id="host-voted-count" style="color:#52be80; font-size:20px; font-weight:bold;">0</span> 人</p>
         
         <button class="btn" style="background:#52be80;" onclick="settleRound()">📢 停止卡位！現場開票！</button>
-        <button class="btn" style="background:#eb984e; color:#000;" onclick="nextRound()">🎬 準備下一題！清空題目與按鈕</button>
+        <button class="btn" style="background:#eb984e; border: 1px solid #555;" onclick="nextRound()">🎬 準備下一題！清空題目與按鈕</button>
         <button class="btn" style="background:#555;" onclick="resetGame()">🔄 全員復活全局重來</button>
         
         <div class="live-panel">
@@ -114,13 +114,13 @@
         
         <div id="vote-area" class="hidden">
             <p style="color:#aaa; font-weight:bold;">請做出你的少數決抉擇：</p>
-            <button class="btn btn-yes" onclick="castVote('Yes')">⭕ YES</button>
-            <button class="btn btn-no" onclick="castVote('No')">❌ NO</button>
+            <button class="btn btn-yes" onclick="castVote('Yes')">⭕ 對 / 認同</button>
+            <button class="btn btn-no" onclick="castVote('No')">❌ 錯 / 不認同</button>
         </div>
         
         <div id="wait-msg" class="hidden">
-            <div style="color:#52be80; font-size:20px; font-weight:bold; margin: 20px 0;">✓ 抉擇已秘密鎖定！</div>
-            <p style="color:#aaa;">請等待主辦人開票結果...</p>
+            <div style="color:#52be80; font-size:24px; font-weight:bold; margin: 20px 0;">✓ 抉擇已秘密鎖定！</div>
+            <p style="color:#aaa; font-size:16px;">您已成功交卷。請靜待主辦人截止並公佈結果...</p>
         </div>
         
         <div id="dead-msg" class="hidden">
@@ -339,7 +339,7 @@
                 document.getElementById('p-voted-count').innerText = votedTotal;
             });
 
-            // 2. 監聽大局狀態 (題目發布同步、按鈕開關、名單渲染)
+            // 2. 監聽大局狀態與個人投票狀態
             roomRef.child('gameStatus').on('value', (snapshot) => {
                 const status = snapshot.val() || {};
                 const qBoard = document.getElementById('player-question-board');
@@ -359,9 +359,9 @@
                     qBoard.classList.add('q-waiting');
                 }
 
-                // B. 根據主辦人切換的遊戲狀態渲染介面
+                // B. 核心畫面邏輯
                 if(status.roundState === 'waiting_question') {
-                    // 主辦人還沒出題：隱藏投票跟所有開票結果，顯示出題中
+                    // 主辦人還沒出題：隱藏按鈕、鎖定訊息與開票框
                     voteArea.classList.add('hidden');
                     waitMsg.classList.add('hidden');
                     deadMsg.classList.add('hidden');
@@ -378,7 +378,7 @@
                     });
 
                 } else if(status.roundState === 'voting') {
-                    // 主辦人出題了！開放投票
+                    // 核心修改處：投票進行中，根據自己有沒有投票來決定按鈕「顯示」還是「消失」
                     resBox.classList.add('hidden');
                     focusBox.classList.add('hidden');
                     deadMsg.classList.add('hidden');
@@ -386,28 +386,33 @@
                     roomRef.child('players').child(myPlayerId).once('value', (snap) => {
                         const me = snap.val() || {};
                         if(!me.alive) {
-                            voteArea.classList.add('hidden'); waitMsg.classList.add('hidden');
+                            voteArea.classList.add('hidden'); 
+                            waitMsg.classList.add('hidden');
                             pStatus.innerText = "🎬 已失去資格 (殺青)"; pStatus.style.background = "#78281f";
                         } else if(me.voted) {
-                            voteArea.classList.add('hidden'); waitMsg.classList.remove('hidden');
+                            // ✨ 已經投過票：按鈕消失！顯示鎖定勾勾
+                            voteArea.classList.add('hidden'); 
+                            waitMsg.classList.remove('hidden');
                             pStatus.innerText = "✓ 抉擇已鎖定"; pStatus.style.background = "#196f3d";
                         } else {
-                            voteArea.classList.remove('hidden'); waitMsg.classList.add('hidden');
+                            // ✨ 還沒投票：按鈕顯示！隱藏鎖定勾勾
+                            voteArea.classList.remove('hidden'); 
+                            waitMsg.classList.add('hidden');
                             pStatus.innerText = "⚡ 請選擇 YES 或 NO"; pStatus.style.background = "#1f618d";
                         }
                     });
 
                 } else if(status.roundState === 'revealed') {
-                    // 主辦人按下開票！
+                    // 主辦人開票
                     voteArea.classList.add('hidden');
                     waitMsg.classList.add('hidden');
                     deadMsg.classList.add('hidden');
                     pStatus.innerText = "🏁 本輪結果已揭曉"; pStatus.style.background = "#d4ac0d"; pStatus.style.color = "#000";
                     
-                    // 渲染置頂區
+                    // 渲染置頂個人結果
                     roomRef.child('players').child(myPlayerId).once('value', (pSnap) => {
                         const me = pSnap.val() || {};
-                        let myChoiceText = me.choice === 'Yes' ? '⭕ YES' : '❌ NO';
+                        let myChoiceText = me.choice === 'Yes' ? '⭕ 對 / 認同 (YES)' : '❌ 錯 / 不認同 (NO)';
                         if(!me.voted) myChoiceText = '🤔 沒投票 / 棄權';
                         
                         focusBox.classList.remove('hidden');
@@ -445,6 +450,7 @@
             });
         }
 
+        // 投完票立刻更新至資料庫，Firebase 的即時回傳會觸發上面的監聽，瞬間讓按鈕消失
         function castVote(choice) { roomRef.child('players').child(myPlayerId).update({ choice: choice, voted: true }); }
     </script>
 </body>
